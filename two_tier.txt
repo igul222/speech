@@ -1,0 +1,48 @@
+Description of the model implemented in two_tier.py
+=========
+
+The model operates on scalar-quantized 16KHz speech waveforms, sample-by-sample:
+each waveform is a sequence x = x_0, x_1, ..., x_t, where each x_i represents 
+one sample, and can take one of 256 discrete values, corresponding to 256 linear
+quantization levels.
+
+The model (taken as a whole) is purely autoregressive; it factorizes the 
+distribution P(x) over length-t waveforms as:
+P(x) = P(x_0) * P(x_1 | x_0) * P(x_2 | x_0, x_1) * ... * P(x_t | x_0:x_t-1)
+
+First I break the sequence into frames of 4 samples each:
+
+f_0:4 = [x_0, x_1, x_2, x_3]
+f_4:7 = [x_4, x_5, x_6, x_7]
+etc...
+
+I run an RNN (specifically, a 3-layer 1024-dim GRU) over these frames (first
+converting the discrete-valued samples in the frames back into continuous values
+so that they can be fed into the RNN).
+
+I apply 4 separate 1024->1024 linear projections to the output of the RNN at 
+each frame (one linear projection per sample). For a frame f_t:t+3, I'll call
+the output of these 4 linear projections o_t, o_t+1, o_t+2, and o_t+3.
+
+Finally, an MLP predicts (using softmax) a distribution over x_t conditioned on
+x_t-1, x_t-2, x_t-3, x_t-4, and o_t-4. Here rather than feeding in the 
+real-valued samples I find the network performs better if I represent each 
+sample as a 256-dim one-hot vector and concatenate the vectors for each sample, 
+along with o_t-4. (In the implementation I use an embedding table for efficiency).
+
+Training details (most of these don't really matter that much):
+
+I train on 10-second sequences from the Blizzard dataset, using truncated BPTT.
+Each truncated BPTT subsequence contains 256 samples (or 64 frames). Minibatch 
+size 128.
+
+I use Adam (default settings). I apply weight normalization 
+(Salimans & Kingma 2016) on all weight matrices, which lets me use Adam's 
+default learning rate of 1e-3. If you don't use weight norm, try lowering your
+learning rate to 2e-4.
+
+Gradients are clipped elementwise to +/- 1.
+
+All weight matrices are initialized to uniform distributions with stdev 
+1/sqrt(fan_in) (LeCun 1998) except ones which occur before ReLUs; there I use
+the initialization from (He et al. 2015).
