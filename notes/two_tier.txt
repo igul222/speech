@@ -32,7 +32,7 @@ along with o_t-4. (In the implementation I use an embedding table for efficiency
 
 Training details (most of these don't really matter that much):
 
-I train on 10-second sequences from the Blizzard dataset, using truncated BPTT.
+I train on 8-second sequences from the Blizzard dataset, using truncated BPTT.
 Each truncated BPTT subsequence contains 256 samples (or 64 frames). Minibatch 
 size 128.
 

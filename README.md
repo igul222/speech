@@ -1,0 +1,7 @@
+- **TODO**: Consider changing my input normalization so that samples have zero DC offset (per Kyle McDonald's suggestion). 
+- **TODO**: I implement a flat, non-heirarchical baseline model (`baseline.py`) and evaluate it against two_tier. 
+	- Controlling for wall-clock time: 
+	- Controlling for number of training steps: 
+- **5/8**: To better understand how the model uses its softmax output, I sample from a 1024-dim model trained for 50K iterations and plot the softmax output distribution at each timestep. See `notes/softmax_visualization.mp4` (action starts around 7:00). I find the model learns roughly-Gaussian unimodal distributions.
+- **5/8**: I'm worried that the samples don't sound quite as good as the old implementation for some reason, so I make the script deterministic (`numpy.random.seed(123)`) and carefully step through the entire model, making sure its generated samples matched my previous implementation number-for-number.
+- **5/7**: Initial release of a cleaned-up (actually mostly rewritten) version of my current best model in `two_tier.py`. Written description in `notes/two_tier.txt` and hastily-drawn model diagram in `notes/two_tier.jpg`.
