@@ -85,6 +85,6 @@ def feed_epoch(data_path, n_files, BATCH_SIZE, SEQ_LEN, OVERLAP, Q_LEVELS, Q_ZER
         ], axis=1)
 
         for i in xrange(batch.shape[1] / SEQ_LEN):
-            reset = (i==0)
+            reset = numpy.int32(i==0)
             subbatch = batch[:, i*SEQ_LEN : (i+1)*SEQ_LEN + OVERLAP]
             yield (subbatch, reset)

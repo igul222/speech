@@ -15,9 +15,10 @@ def print_params_info(cost, params):
     """Print information about the parameters in the given param set."""
 
     params = sorted(params, key=lambda p: p.name)
-    shapes = [p.get_value(borrow=True).shape for p in params]
-    print "Params:"
-    for param, shape in zip(params, shapes):
+    values = [p.get_value(borrow=True) for p in params]
+    shapes = [p.shape for p in values]
+    print "Params for cost:"
+    for param, value, shape in zip(params, values, shapes):
         print "\t{0} ({1})".format(
             param.name,
             ",".join([str(x) for x in shape])

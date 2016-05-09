@@ -6,17 +6,20 @@ Ishaan Gulrajani
 import os, sys
 sys.path.append(os.getcwd())
 
+import numpy
+numpy.random.seed(123)
+import random
+random.seed(123)
+
 import dataset
 
-import numpy
 import theano
 import theano.tensor as T
+import theano.ifelse
 import lib
 import lasagne
 import scipy.io.wavfile
-import scikits.audiolab
 
-import random
 import time
 import functools
 
@@ -40,12 +43,23 @@ TEST_SET_SIZE = 128 # How many audio files to use for the test set
 SEQ_LEN = N_FRAMES * FRAME_SIZE # Total length (# of samples) of each truncated BPTT sequence
 Q_ZERO = numpy.int32(Q_LEVELS//2) # Discrete value correponding to zero amplitude
 
-def frame_level_rnn(input_sequences, h0):
+def frame_level_rnn(input_sequences, h0, reset):
     """
     input_sequences.shape: (batch size, n frames * FRAME_SIZE)
     h0.shape:              (batch size, N_GRUS, DIM)
+    reset.shape:           ()
     output.shape:          (batch size, n frames * FRAME_SIZE, DIM)
     """
+
+    if N_GRUS != 3:
+        raise Exception('N_GRUS must be 3, at least for now')
+
+    learned_h0 = lib.param(
+        'FrameLevel.h0',
+        numpy.zeros((N_GRUS, DIM), dtype=theano.config.floatX)
+    )
+    learned_h0 = T.alloc(learned_h0, h0.shape[0], N_GRUS, DIM)
+    h0 = theano.ifelse.ifelse(reset, learned_h0, h0)
 
     frames = input_sequences.reshape((
         input_sequences.shape[0],
@@ -55,11 +69,8 @@ def frame_level_rnn(input_sequences, h0):
 
     # Rescale prev_frames from ints in [0, Q_LEVELS) to floats in [-2, 2]
     # (a reasonable range to pass as inputs to the RNN)
-    frames = (frames.astype('float32') / lib.floatX(Q_LEVELS/2.)) - lib.floatX(1)
+    frames = (frames.astype('float32') / lib.floatX(Q_LEVELS/2)) - lib.floatX(1)
     frames *= lib.floatX(2)
-
-    if N_GRUS != 3:
-        raise Exception('N_GRUS must be 3, at least for now')
 
     gru1 = lib.ops.LowMemGRU('FrameLevel.GRU1', FRAME_SIZE, DIM, frames, h0=h0[:, 0])
     gru2 = lib.ops.LowMemGRU('FrameLevel.GRU2', DIM, DIM, gru1, h0=h0[:, 1])
@@ -113,15 +124,16 @@ def sample_level_predictor(frame_level_outputs, prev_samples):
 
 sequences   = T.imatrix('sequences')
 h0          = T.tensor3('h0')
+reset       = T.iscalar('reset')
 
 input_sequences = sequences[:, :-FRAME_SIZE]
 target_sequences = sequences[:, FRAME_SIZE:]
 
-frame_level_outputs, new_h0 = frame_level_rnn(input_sequences, h0)
+frame_level_outputs, new_h0 = frame_level_rnn(input_sequences, h0, reset)
 
 prev_samples = sequences[:, :-1]
-prev_samples = prev_samples.reshape((1, BATCH_SIZE, -1, 1))
-prev_samples = T.nnet.neighbours.images2neibs(prev_samples, (FRAME_SIZE, 1), neib_step=(1, 1), mode='valid')
+prev_samples = prev_samples.reshape((1, BATCH_SIZE, 1, -1))
+prev_samples = T.nnet.neighbours.images2neibs(prev_samples, (1, FRAME_SIZE), neib_step=(1, 1), mode='valid')
 prev_samples = prev_samples.reshape((BATCH_SIZE * SEQ_LEN, FRAME_SIZE))
 
 sample_level_outputs = sample_level_predictor(
@@ -147,20 +159,20 @@ grads = [T.clip(g, lib.floatX(-GRAD_CLIP), lib.floatX(GRAD_CLIP)) for g in grads
 updates = lasagne.updates.adam(grads, params)
 
 train_fn = theano.function(
-    [sequences, h0],
+    [sequences, h0, reset],
     [cost, new_h0],
     updates=updates,
     on_unused_input='warn'
 )
 
 frame_level_generate_fn = theano.function(
-    [sequences, h0],
-    frame_level_rnn(sequences, h0),
+    [sequences, h0, reset],
+    frame_level_rnn(sequences, h0, reset),
     on_unused_input='warn'
 )
 
 frame_level_outputs = T.matrix('frame_level_outputs')
-prev_samples = T.imatrix('prev_samples')
+prev_samples        = T.imatrix('prev_samples')
 sample_level_generate_fn = theano.function(
     [frame_level_outputs, prev_samples],
     lib.ops.softmax_and_sample(
@@ -183,7 +195,7 @@ def generate_and_save_samples(tag):
         scipy.io.wavfile.write(name+'.wav', BITRATE, data)
 
     # Generate 5 sample files, each 5 seconds long
-    N_SEQS = 5
+    N_SEQS = 10
     LENGTH = 5*BITRATE
 
     samples = numpy.zeros((N_SEQS, LENGTH), dtype='int32')
@@ -197,7 +209,8 @@ def generate_and_save_samples(tag):
         if t % FRAME_SIZE == 0:
             frame_level_outputs, h0 = frame_level_generate_fn(
                 samples[:, t-FRAME_SIZE:t], 
-                h0
+                h0,
+                numpy.int32(t == FRAME_SIZE)
             )
 
         samples[:, t] = sample_level_generate_fn(
@@ -221,10 +234,7 @@ for epoch in xrange(1000):
 
     for i, (seqs, reset) in enumerate(data_feeder):
 
-        if reset:
-            h0.fill(0)
-
-        cost, h0 = train_fn(seqs, h0)
+        cost, h0 = train_fn(seqs, h0, reset)
 
         costs.append(cost)
         times.append(time.time() - t0)

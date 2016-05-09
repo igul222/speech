@@ -46,3 +46,6 @@ Gradients are clipped elementwise to +/- 1.
 All weight matrices are initialized to uniform distributions with stdev 
 1/sqrt(fan_in) (LeCun 1998) except ones which occur before ReLUs; there I use
 the initialization from (He et al. 2015).
+
+For Blizzard, samples usually start to sound okay after ~50K iterations with the
+above settings. This takes about 6 hours on a Titan X for a 512-dim model.

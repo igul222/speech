@@ -12,7 +12,7 @@ def Linear(
         output_dim, 
         inputs,
         biases=True,
-        initialization='lecun',
+        initialization=None,
         weightnorm=True
         ):
     """
@@ -24,9 +24,14 @@ def Linear(
     biases:     whether or not to include a bias term.
     inputs:     a theano variable, or list of variables (if multiple inputs);
                 the inputs to which to apply the transform.
-    initialization: one of `lecun`, `he`
-    weightnorm: whether to use Weight Normalization (Salimans, Kingma 2016)
+    initialization: one of None, `lecun`, `he`, `orthogonal`
     """
+
+    if not isinstance(input_dims, list):
+        input_dims = [input_dims]
+        inputs = [inputs]
+
+    terms = []
 
     def uniform(stdev, size):
         """uniform distribution with the given stdev and size"""
@@ -36,18 +41,26 @@ def Linear(
             size=size
         ).astype(theano.config.floatX)
 
-    if not isinstance(input_dims, list):
-        input_dims = [input_dims]
-        inputs = [inputs]
-
-    terms = []
-
     for i, (inp, inp_dim) in enumerate(zip(inputs, input_dims)):
-
         if initialization == 'lecun' or (initialization == None and inp_dim != output_dim):
             weight_values = uniform(numpy.sqrt(1. / inp_dim), (inp_dim, output_dim))
         elif initialization == 'he':
             weight_values = uniform(numpy.sqrt(2. / inp_dim), (inp_dim, output_dim))
+        elif initialization == 'orthogonal' or (initialization == None and inp_dim == output_dim):
+            # From lasagne
+            def sample(shape):
+                if len(shape) < 2:
+                    raise RuntimeError("Only shapes of length 2 or more are "
+                                       "supported.")
+                flat_shape = (shape[0], numpy.prod(shape[1:]))
+                # TODO: why normal and not uniform?
+                a = numpy.random.normal(0.0, 1.0, flat_shape)
+                u, _, v = numpy.linalg.svd(a, full_matrices=False)
+                # pick the one with the correct shape
+                q = u if u.shape == flat_shape else v
+                q = q.reshape(shape)
+                return q.astype(theano.config.floatX)
+            weight_values = sample((inp_dim, output_dim))
         else:
             raise Exception("Invalid initialization!")
 
@@ -62,6 +75,7 @@ def Linear(
                 name + '.g'+str(i),
                 norm_values
             )
+
             normed_weight = weight * (norms / weight.norm(2, axis=0)).dimshuffle('x', 0)
             terms.append(T.dot(inp, normed_weight))
         else:        
@@ -162,7 +176,8 @@ def GRUStep(name, input_dim, hidden_dim, current_input, last_hidden):
             hidden_dim, 
             hidden_dim, 
             scaled_hidden,
-            biases=False
+            biases=False,
+            initialization='orthogonal'
         ) + processed_input[:, 2*hidden_dim:]
     )
 
