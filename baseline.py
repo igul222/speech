@@ -5,10 +5,10 @@ Ishaan Gulrajani
 import os, sys
 sys.path.append(os.getcwd())
 
-# This only matters on Ishaan's computer
-try:
+try: # This only matters on Ishaan's computer
     import gpu_queue
-    gpu_queue.wait_for_gpu()
+    # gpu_queue.delay(60*60*3)
+    gpu_queue.wait_for_gpu(high_priority=False)
 except ImportError:
     pass
 
