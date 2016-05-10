@@ -161,6 +161,9 @@ cost = T.nnet.categorical_crossentropy(
 # Switch to nats by commenting out this line:
 cost = cost * lib.floatX(1.44269504089)
 
+# Note to others: 
+# This auxiliary term to the cost is very experimental! If you're trying to
+# reproduce this model, don't implement it!
 independent_preds = frame_level_outputs.reshape((BATCH_SIZE * SEQ_LEN, DIM))
 independent_preds = lib.ops.Linear('IndependentPreds.L1', DIM, DIM, independent_preds, initialization='he')
 independent_preds = T.nnet.relu(independent_preds)
