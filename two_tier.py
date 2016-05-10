@@ -2,9 +2,15 @@
 RNN Speech Generation Model
 Ishaan Gulrajani
 """
-
 import os, sys
 sys.path.append(os.getcwd())
+
+# This only matters on Ishaan's computer
+try:
+    import gpu_queue
+    gpu_queue.wait_for_gpu()
+except ImportError:
+    pass
 
 import numpy
 numpy.random.seed(123)
@@ -22,6 +28,7 @@ import scipy.io.wavfile
 
 import time
 import functools
+import itertools
 
 # Hyperparams
 BATCH_SIZE = 128
@@ -38,7 +45,11 @@ N_FILES = 141703
 BITRATE = 16000
 
 # Other constants
-PRINT_EVERY = 10000 # Print cost, generate samples, save model checkpoint every N iterations.
+TRAIN_MODE = 'time' # 'iters' to use PRINT_ITERS and STOP_ITERS, 'time' to use PRINT_TIME and STOP_TIME
+PRINT_ITERS = 10000 # Print cost, generate samples, save model checkpoint every N iterations.
+STOP_ITERS = 100000 # Stop after this many iterations
+PRINT_TIME = 10 # Print cost, generate samples, save model checkpoint every N seconds.
+STOP_TIME = 30 # Stop after this many seconds of actual training (not including time req'd to generate samples etc.)
 TEST_SET_SIZE = 128 # How many audio files to use for the test set
 SEQ_LEN = N_FRAMES * FRAME_SIZE # Total length (# of samples) of each truncated BPTT sequence
 Q_ZERO = numpy.int32(Q_LEVELS//2) # Discrete value correponding to zero amplitude
@@ -67,7 +78,7 @@ def frame_level_rnn(input_sequences, h0, reset):
         FRAME_SIZE
     ))
 
-    # Rescale prev_frames from ints in [0, Q_LEVELS) to floats in [-2, 2]
+    # Rescale frames from ints in [0, Q_LEVELS) to floats in [-2, 2]
     # (a reasonable range to pass as inputs to the RNN)
     frames = (frames.astype('float32') / lib.floatX(Q_LEVELS/2)) - lib.floatX(1)
     frames *= lib.floatX(2)
@@ -222,34 +233,45 @@ def generate_and_save_samples(tag):
         write_audio_file("sample_{}_{}".format(tag, i), samples[i])
 
 print "Training!"
-
-for epoch in xrange(1000):
+total_iters = 0
+total_time = 0.
+last_print_time = 0.
+last_print_iters = 0
+for epoch in itertools.count():
 
     h0 = numpy.zeros((BATCH_SIZE, N_GRUS, DIM), dtype='float32')
     costs = []
-    times = []
     data_feeder = dataset.feed_epoch(DATA_PATH, N_FILES, BATCH_SIZE, SEQ_LEN, FRAME_SIZE, Q_LEVELS, Q_ZERO)
 
-    t0 = time.time()
+    for seqs, reset in data_feeder:
 
-    for i, (seqs, reset) in enumerate(data_feeder):
-
+        start_time = time.time()
         cost, h0 = train_fn(seqs, h0, reset)
+        total_time += time.time() - start_time
+        total_iters += 1
 
         costs.append(cost)
-        times.append(time.time() - t0)
 
-        if len(costs) == PRINT_EVERY:
-            print "epoch:{}\titer:{}\ttrain cost:{}\titer time:{}".format(
-                epoch, 
-                i+1, 
+        if (TRAIN_MODE=='iters' and total_iters-last_print_iters == PRINT_ITERS) or \
+            (TRAIN_MODE=='time' and total_time-last_print_time >= PRINT_TIME):
+            
+            print "epoch:{}\ttotal iters:{}\ttrain cost:{}\ttotal time:{}\ttime per iter:{}".format(
+                epoch,
+                total_iters,
                 numpy.mean(costs),
-                numpy.mean(times)
+                total_time,
+                total_time / total_iters
             )
-            costs = []
-            times = []
-            tag = "epoch{}_iter{}".format(epoch, i+1)
+            tag = "iters{}_time{}".format(total_iters, total_time)
             generate_and_save_samples(tag)
             lib.save_params('params_{}.pkl'.format(tag))
 
-        t0 = time.time()
+            costs = []
+            last_print_time += PRINT_TIME
+            last_print_iters += PRINT_ITERS
+
+        if (TRAIN_MODE=='iters' and total_iters == STOP_ITERS) or \
+            (TRAIN_MODE=='time' and total_time >= STOP_TIME):
+
+            print "Done!"
+            sys.exit()
