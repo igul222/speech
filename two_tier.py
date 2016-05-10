@@ -161,30 +161,17 @@ cost = T.nnet.categorical_crossentropy(
 # Switch to nats by commenting out this line:
 cost = cost * lib.floatX(1.44269504089)
 
-# Note to others: 
-# This auxiliary term to the cost is very experimental! If you're trying to
-# reproduce this model, don't implement it!
-independent_preds = frame_level_outputs.reshape((BATCH_SIZE * SEQ_LEN, DIM))
-independent_preds = lib.ops.Linear('IndependentPreds.L1', DIM, DIM, independent_preds, initialization='he')
-independent_preds = T.nnet.relu(independent_preds)
-independent_preds = lib.ops.Linear('IndependentPreds.Output', DIM, Q_LEVELS, independent_preds)
-independent_pred_cost = T.nnet.categorical_crossentropy(
-    T.nnet.softmax(independent_preds),
-    target_sequences.flatten()
-).mean() * lib.floatX(1.44269504089)
-total_cost = cost + independent_pred_cost
+params = lib.search(cost, lambda x: hasattr(x, 'param'))
+lib._train.print_params_info(cost, params)
 
-params = lib.search(total_cost, lambda x: hasattr(x, 'param'))
-lib._train.print_params_info(total_cost, params)
-
-grads = T.grad(total_cost, wrt=params, disconnected_inputs='warn')
+grads = T.grad(cost, wrt=params, disconnected_inputs='warn')
 grads = [T.clip(g, lib.floatX(-GRAD_CLIP), lib.floatX(GRAD_CLIP)) for g in grads]
 
 updates = lasagne.updates.adam(grads, params)
 
 train_fn = theano.function(
     [sequences, h0, reset],
-    [cost, independent_pred_cost, new_h0],
+    [cost, new_h0],
     updates=updates,
     on_unused_input='warn'
 )
@@ -254,27 +241,24 @@ for epoch in itertools.count():
 
     h0 = numpy.zeros((BATCH_SIZE, N_GRUS, DIM), dtype='float32')
     costs = []
-    ip_costs = []
     data_feeder = dataset.feed_epoch(DATA_PATH, N_FILES, BATCH_SIZE, SEQ_LEN, FRAME_SIZE, Q_LEVELS, Q_ZERO)
 
     for seqs, reset in data_feeder:
 
         start_time = time.time()
-        cost, ip_cost, h0 = train_fn(seqs, h0, reset)
+        cost, h0 = train_fn(seqs, h0, reset)
         total_time += time.time() - start_time
         total_iters += 1
 
         costs.append(cost)
-        ip_costs.append(ip_cost)
 
         if (TRAIN_MODE=='iters' and total_iters-last_print_iters == PRINT_ITERS) or \
             (TRAIN_MODE=='time' and total_time-last_print_time >= PRINT_TIME):
             
-            print "epoch:{}\ttotal iters:{}\ttrain cost:{}\tip cost:{}\ttotal time:{}\ttime per iter:{}".format(
+            print "epoch:{}\ttotal iters:{}\ttrain cost:{}\ttotal time:{}\ttime per iter:{}".format(
                 epoch,
                 total_iters,
                 numpy.mean(costs),
-                numpy.mean(ip_costs),
                 total_time,
                 total_time / total_iters
             )
@@ -283,7 +267,6 @@ for epoch in itertools.count():
             lib.save_params('params_{}.pkl'.format(tag))
 
             costs = []
-            ip_costs = []
             last_print_time += PRINT_TIME
             last_print_iters += PRINT_ITERS
 

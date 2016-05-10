@@ -1,7 +1,9 @@
 - **5/9**: Per Y's suggestion I add a term to the loss function asking the frame-level RNN to predict the next frame, without help of the sample-level MLP.
 	- Before: `twotier_determ_bigrun_qzero_1462749482`, 1.827 iters 0-10K, 1.513 iters 90K-100K. (copied from below)
 	- After: `twotier_ipcost_1462871075`
-- **TODO**: Consider changing my input normalization so that samples have zero DC offset (per Kyle McDonald's suggestion). 
+	- I also try weighting the auxiliary cost term by 0.1: `twotier_ipcost_weighted_1462891119`
+- **5/9**: I try changing my input normalization so that samples have zero DC offset (per Kyle McDonald's suggestion). Unfortunately this is probably going to improve NLL, but in a way that's meaningless. I'll evaluate by listening to samples and checking them in Audacity.
+	- `twotier_zero_dc_offset_1462873780`
 - **5/9**: I implement a flat, non-heirarchical baseline model (`baseline.py`) and evaluate it against two-tier. I try two variants, feeding values into the GRUs as real values (what I did in two-tier) and as embeddings. I report NLLs in bits per sample on the train set (this is mostly OK because I never make it through one epoch). **TODO report results**
 	- Controlling for wall-clock time, where each model uses its own reasonable hyperparams (to see which model "wins" overall):
 		- Two-tier: `twotier_time_benchmark_1462865129`
