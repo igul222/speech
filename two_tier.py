@@ -45,11 +45,11 @@ N_FILES = 141703
 BITRATE = 16000
 
 # Other constants
-TRAIN_MODE = 'time' # 'iters' to use PRINT_ITERS and STOP_ITERS, 'time' to use PRINT_TIME and STOP_TIME
+TRAIN_MODE = 'iters' # 'iters' to use PRINT_ITERS and STOP_ITERS, 'time' to use PRINT_TIME and STOP_TIME
 PRINT_ITERS = 10000 # Print cost, generate samples, save model checkpoint every N iterations.
 STOP_ITERS = 100000 # Stop after this many iterations
-PRINT_TIME = 10 # Print cost, generate samples, save model checkpoint every N seconds.
-STOP_TIME = 30 # Stop after this many seconds of actual training (not including time req'd to generate samples etc.)
+PRINT_TIME = 60*60 # Print cost, generate samples, save model checkpoint every N seconds.
+STOP_TIME = 60*60*12 # Stop after this many seconds of actual training (not including time req'd to generate samples etc.)
 TEST_SET_SIZE = 128 # How many audio files to use for the test set
 SEQ_LEN = N_FRAMES * FRAME_SIZE # Total length (# of samples) of each truncated BPTT sequence
 Q_ZERO = numpy.int32(Q_LEVELS//2) # Discrete value correponding to zero amplitude
