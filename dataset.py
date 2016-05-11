@@ -44,13 +44,13 @@ def feed_epoch(data_path, n_files, BATCH_SIZE, SEQ_LEN, OVERLAP, Q_LEVELS, Q_ZER
         """
         eps = numpy.float64(1e-5)
 
-        # data -= data.min(axis=1)[:, None]
-        # data *= ((Q_LEVELS - eps) / data.max(axis=1)[:, None])
-        # data += eps/2
-        print "WARNING using zero-dc-offset normalization"
-        data -= data.mean(axis=1)[:, None]
-        data *= (((Q_LEVELS/2.) - eps) / numpy.abs(data).max(axis=1)[:, None])
-        data += Q_LEVELS/2
+        data -= data.min(axis=1)[:, None]
+        data *= ((Q_LEVELS - eps) / data.max(axis=1)[:, None])
+        data += eps/2
+        # print "WARNING using zero-dc-offset normalization"
+        # data -= data.mean(axis=1)[:, None]
+        # data *= (((Q_LEVELS/2.) - eps) / numpy.abs(data).max(axis=1)[:, None])
+        # data += Q_LEVELS/2
 
         data = data.astype('int32')
 

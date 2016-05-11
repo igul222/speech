@@ -6,9 +6,8 @@ import os, sys
 sys.path.append(os.getcwd())
 
 try: # This only matters on Ishaan's computer
-    import gpu_queue
-    # gpu_queue.delay(60*60*3)
-    gpu_queue.wait_for_gpu(high_priority=False)
+    import experiment_tools
+    experiment_tools.wait_for_gpu(high_priority=False)
 except ImportError:
     pass
 
@@ -274,4 +273,11 @@ for epoch in itertools.count():
             (TRAIN_MODE=='time' and total_time >= STOP_TIME):
 
             print "Done!"
+
+            try: # This only matters on Ishaan's computer
+                import experiment_tools
+                experiment_tools.send_sms("done!")
+            except ImportError:
+                pass
+
             sys.exit()
