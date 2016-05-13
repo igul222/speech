@@ -41,6 +41,8 @@ GRAD_CLIP = 1 # Elementwise grad clip threshold
 # Dataset
 DATA_PATH = '/media/seagate/blizzard/parts'
 N_FILES = 141703
+# DATA_PATH = '/PersimmonData/kiwi_parts'
+# N_FILES = 516
 BITRATE = 16000
 
 # Other constants
@@ -52,6 +54,12 @@ STOP_TIME = 60*60*12 # Stop after this many seconds of actual training (not incl
 TEST_SET_SIZE = 128 # How many audio files to use for the test set
 SEQ_LEN = N_FRAMES * FRAME_SIZE # Total length (# of samples) of each truncated BPTT sequence
 Q_ZERO = numpy.int32(Q_LEVELS//2) # Discrete value correponding to zero amplitude
+
+print "Model settings:"
+all_vars = [(k,v) for (k,v) in locals().items() if (k.isupper() and k != 'T')]
+all_vars = sorted(all_vars, key=lambda x: x[0])
+for var_name, var_value in all_vars:
+    print "\t{}: {}".format(var_name, var_value)
 
 def frame_level_rnn(input_sequences, h0, reset):
     """

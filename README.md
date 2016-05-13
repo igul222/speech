@@ -1,20 +1,37 @@
-- **5/9**: Per Y's suggestion I add a term to the loss function asking the frame-level RNN to predict the next frame, without help of the sample-level MLP.
+- **5/12**: I run the two-tier model with frame_size=2.
+	- Evaluating by wall-clock time, taking the better of n_frames=64, 128
+		- `twotier_fs2_nf64_time_1463123320`
+		- `twotier_fs2_nf128_time_1463123388`
+	- Evaluating by number of training iterations with n_frames=128
+		- `twotier_fs2_iters_1463123438`
+- **5/10**: I try overfitting to Kyle's kiwi01.wav. I train for 6 hours, generating samples every hour.
+	- Both two-tier model and baseline (`baseline_kiwi_1462942688`, `twotier_kiwi_1462942828`) get almost-zero train cost, and generate samples indistinguishable from the original.
+- **5/9**: Per Yoshua's suggestion I add a term to the loss function asking the frame-level RNN to predict the next frame, without help of the sample-level MLP.
 	- Before: `twotier_determ_bigrun_qzero_1462749482`, 1.827 iters 0-10K, 1.513 iters 90K-100K. (copied from below)
-	- After: `twotier_ipcost_1462871075`
-	- I also try weighting the auxiliary cost term by 0.1: `twotier_ipcost_weighted_1462891119`
+	- After: `twotier_ipcost_1462871075` 1.928 iters 0-10K, 1.537 iters 90K-100K. Samples are a little different but I'm not sure they're any better or worse.
+	- I also try weighting the auxiliary cost term by 0.1: `twotier_ipcost_weighted_1462891119` 1.848 iters 0-10K, 1.520 iters 90-100K. Samples indistinguishable from original model.
+	- Conclusions
+		- This is basically multi-task learning, which usually works as a regularizer in regimes of limited data. But our data here is unlimited, so it's reasonable that this doesn't help NLL.
+		- It's still possible that this method might produce better samples in some scenarios (even though it didn't seem to here), so I'll keep trying this in future experiments.
 - **5/9**: I try changing my input normalization so that samples have zero DC offset (per Kyle McDonald's suggestion). Unfortunately this is probably going to improve NLL, but in a way that's meaningless. I'll evaluate by listening to samples and checking them in Audacity.
-	- `twotier_zero_dc_offset_1462873780`
-- **5/9**: I implement a flat, non-heirarchical baseline model (`baseline.py`) and evaluate it against two-tier. I try two variants, feeding values into the GRUs as real values (what I did in two-tier) and as embeddings. I report NLLs in bits per sample on the train set (this is mostly OK because I never make it through one epoch). **TODO report results**
+	- `twotier_zero_dc_offset_1462873780` 1.792 iters 0-10K, 1.504 iters 90K-100K. Samples seem weirdly broken though: speech still sounds good, but there's a very faint whining noise in the background the whole time. Maybe this is something to come back to if I have more time but for now I'm just going to leave it off.
+- **5/9**: I implement a flat, baseline model (`baseline.py`) and evaluate it against the two-tier model.
+	- Basically a language model: 3 layers of stacked 512-dim GRU, taking as input one sample at a time and predicting the next timestep.
+	- I try two variants: one feeding values into the GRUs as real values (what I did in two-tier), the other as embeddings of 256 discrete values.
+	- I report NLLs in bits per sample on the train set (not perfect procedure, but mostly-OK because I never make it through one epoch).
 	- Controlling for wall-clock time, where each model uses its own reasonable hyperparams (to see which model "wins" overall):
-		- Two-tier: `twotier_time_benchmark_1462865129` 1.833 first hour, 1.503 12th hour **TODO check samples**
-		- Flat reals seqlen 64: `speech_baseline_time_reals_seqlen64_1462866948` 2.057 first hour, 1.696 12th hour. Samples are clean but "warbly" / guttural sounding?
-		- Flat reals seqlen 128: `speech_baseline_time_reals_seqlen128_1462867000` **still training**
-		- Flat embeddings seqlen 128: `speech_baseline_time_embed_seqlen64_1462867483` **still training**
-		- Flat embeddings seqlen 64: `speech_baseline_time_embed_seqlen128_1462867499` **still training**
-	- Controlling for number of training steps, where each step has the same SEQ_LEN (to see if the two-tier model's gains might just be by virtue of training speed):
+		- Two-tier: `twotier_time_benchmark_1462865129` 1.833 first hour, 1.503 12th hour. Samples a little noisy but decent / not broken.
+		- Flat reals seqlen 64: `speech_baseline_time_reals_seqlen64_1462866948` 2.057 first hour, 1.696 12th hour. Samples clean but "warbly" / guttural sounding?
+		- Flat reals seqlen 128: `speech_baseline_time_reals_seqlen128_1462867000` 2.143 first hour, 1.612 12th hour
+		- Flat embeddings seqlen 128: `speech_baseline_time_embed_seqlen64_1462867483` 2.104 first hour, 1.688 12th hour
+		- Flat embeddings seqlen 64: `speech_baseline_time_embed_seqlen128_1462867499` 2.144 first hour, 1.624 12th hour
+	- To see what happens if we ignore differences in training speed, I run a trial controlling for number of training steps, where each step sees the same sequence length (256) and batch size (128).
 		- Two-tier: `twotier_determ_bigrun_qzero_1462749482`, 1.827 iters 0-10K, 1.513 iters 90K-100K. ***best model so far***
-		- Flat reals: `speech_baseline_iters_reals_1462866911` **still training**
-		- Flat embeddings: `speech_baseline_iters_embed_1462867526` **still training**
+		- Flat reals: `speech_baseline_iters_reals_1462866911` 2.003 iters 0-10K, 1.528 iters 90K-100K.
+		- Flat embeddings: `speech_baseline_iters_embed_1462867526` 1.961 iters 0-10K, **still training**
+	- Conclusions
+		- If you ignore training speed, for the hyperparameters tested, my model slightly outperforms the baseline. 
+		- But I don't think it's fair to ignore training speed. If you control for training speed, for the hyperparameters tested, my model outperforms the baseline by a wider margin.
 - **5/8**: To better understand how the model uses its softmax output, I sample from a 1024-dim model trained for 50K iterations and plot the softmax output distribution at each timestep. See `notes/softmax_visualization.mp4` (action starts around 7:00). I find the model learns roughly-Gaussian unimodal distributions.
 - **5/8**: I'm worried that the samples don't sound quite as good as the old implementation for some reason, so I make the script deterministic (`numpy.random.seed(123)`) and carefully step through the entire model, making sure its generated samples matched my previous implementation number-for-number.
 - **5/7**: Initial release of a cleaned-up (actually mostly rewritten) version of my current best model in `two_tier.py`. Written description in `notes/two_tier.txt` and hastily-drawn model diagram in `notes/two_tier.jpg`.
