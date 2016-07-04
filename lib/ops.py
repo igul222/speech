@@ -15,6 +15,8 @@ def Linear(
         initialization=None,
         weightnorm=True
         ):
+    # print "warning weightnorm off"
+
     """
     Compute a linear transform of one or more inputs, optionally with a bias.
 
@@ -78,7 +80,7 @@ def Linear(
 
             normed_weight = weight * (norms / weight.norm(2, axis=0)).dimshuffle('x', 0)
             terms.append(T.dot(inp, normed_weight))
-        else:        
+        else:
             terms.append(T.dot(inp, weight))
 
     if biases:

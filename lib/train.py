@@ -9,6 +9,8 @@ import math
 import time
 import locale
 
+import numpy
+
 locale.setlocale(locale.LC_ALL, '')
 
 def print_params_info(cost, params):

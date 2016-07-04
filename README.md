@@ -1,9 +1,15 @@
+- **5/13**: Does my two-tier model actually learn longer-term dependencies, or does it just train faster? I vary frame size, controlling for sequence length, number of params, number of iters.
+	- Frame size 4: `twotier_determ_bigrun_qzero_1462749482`, 1.827 iters 0-10K, 1.513 iters 90K-100K. (copied from below)
+	- Frame size 2: `twotier_fs2_iters_1463123438` 1.775 iters 0-10K, 1.485 iters 90-100K.
+	- Frame size 1: `twotier_fs1_iters_1463157179` (aborted but got to 70K iters)
 - **5/12**: I run the two-tier model with frame_size=2.
 	- Evaluating by wall-clock time, taking the better of n_frames=64, 128
-		- `twotier_fs2_nf64_time_1463123320`
-		- `twotier_fs2_nf128_time_1463123388`
-	- Evaluating by number of training iterations with n_frames=128
-		- `twotier_fs2_iters_1463123438`
+		- `twotier_fs2_nf64_time_1463123320` 1.834 first hour, 1.523 12th hour
+		- `twotier_fs2_nf128_time_1463123388` 1.883 first hour, 1.504 12th hour
+	- Interesting: frame size 2 performs (almost) as well as frame size 4. What about fs 1?
+		- n_frames 64 `twotier_fs1_nf64_time_1463175548` (see spreadsheet)
+		- n_frames 128 `twotier_fs1_nf128_time_1463175563` (see spreadsheet)
+		- n_frames 256 `twotier_fs1_nf256_time_1463175585` (see spreadsheet)
 - **5/10**: I try overfitting to Kyle's kiwi01.wav. I train for 6 hours, generating samples every hour.
 	- Both two-tier model and baseline (`baseline_kiwi_1462942688`, `twotier_kiwi_1462942828`) get almost-zero train cost, and generate samples indistinguishable from the original.
 - **5/9**: Per Yoshua's suggestion I add a term to the loss function asking the frame-level RNN to predict the next frame, without help of the sample-level MLP.
@@ -20,15 +26,28 @@
 	- I try two variants: one feeding values into the GRUs as real values (what I did in two-tier), the other as embeddings of 256 discrete values.
 	- I report NLLs in bits per sample on the train set (not perfect procedure, but mostly-OK because I never make it through one epoch).
 	- Controlling for wall-clock time, where each model uses its own reasonable hyperparams (to see which model "wins" overall):
-		- Two-tier: `twotier_time_benchmark_1462865129` 1.833 first hour, 1.503 12th hour. Samples a little noisy but decent / not broken.
+		- Two-tier: `twotier_time_benchmark_1462865129` 1.833 first hour, 1.503 12th hour. Samples a little noisy but decent / not broken. ***best model***
 		- Flat reals seqlen 64: `speech_baseline_time_reals_seqlen64_1462866948` 2.057 first hour, 1.696 12th hour. Samples clean but "warbly" / guttural sounding?
-		- Flat reals seqlen 128: `speech_baseline_time_reals_seqlen128_1462867000` 2.143 first hour, 1.612 12th hour
-		- Flat embeddings seqlen 128: `speech_baseline_time_embed_seqlen64_1462867483` 2.104 first hour, 1.688 12th hour
-		- Flat embeddings seqlen 64: `speech_baseline_time_embed_seqlen128_1462867499` 2.144 first hour, 1.624 12th hour
-	- To see what happens if we ignore differences in training speed, I run a trial controlling for number of training steps, where each step sees the same sequence length (256) and batch size (128).
-		- Two-tier: `twotier_determ_bigrun_qzero_1462749482`, 1.827 iters 0-10K, 1.513 iters 90K-100K. ***best model so far***
-		- Flat reals: `speech_baseline_iters_reals_1462866911` 2.003 iters 0-10K, 1.528 iters 90K-100K.
-		- Flat embeddings: `speech_baseline_iters_embed_1462867526` 1.961 iters 0-10K, **still training**
+		- Flat reals seqlen 128: `speech_baseline_time_reals_seqlen128_1462867000` 2.143 first hour, 1.612 12th hour ***best baseline model***
+		- Flat embeddings seqlen 64: `speech_baseline_time_embed_seqlen64_1462867483` 2.104 first hour, 1.688 12th hour
+		- Flat embeddings seqlen 128: `speech_baseline_time_embed_seqlen128_1462867499` 2.144 first hour, 1.624 12th hour
+		- **5/13**: I run even more hyperparam combinations to be thorough.
+			- Flat reals seqlen 256 512dim 3-layer `baseline_seqlen256_time_1463191213`
+			- Two-tier 512dim 4-layer `twotier_512d_4layer_1463191505`
+			- Two-tier 512dim 5-layer `twotier_512d_5layer_1463192292`
+			- Two-tier 1024dim 3-layer `twotier_1024d_3layer_1463191610`
+			- Two-tier 1024dim 4-layer `twotier_1024d_4layer_1463192438`
+			- Two-tier 1024dim 5-layer `twotier_1024d_5layer_1463191722`
+			- Flat reals seqlen 128 512dim 4-layer `baseline_seqlen128_512d_4layer_1463191559`
+			- Flat reals seqlen 128 512dim 5-layer `baseline_seqlen128_512d_5layer_1463192296`
+			- Flat reals seqlen 128 1024dim 3-layer `baseline_seqlen128_1024d_3layer_1463191659`
+			- Flat reals seqlen 128 1024dim 4-layer `baseline_seqlen128_1024d_4layer_1463192446`
+			- Flat reals seqlen 128 1024dim 5-layer `baseline_seqlen128_1024d_5layer_1463191875`
+	- <del>To see what happens if we ignore differences in training speed, I run a trial controlling for number of training steps, where each step sees the same sequence length (256) and batch size (128).</del>
+		- <del>Two-tier: `twotier_determ_bigrun_qzero_1462749482`, 1.827 iters 0-10K, 1.513 iters 90K-100K.</del>
+		- <del>Flat reals: `speech_baseline_iters_reals_1462866911` 2.003 iters 0-10K, 1.528 iters 90K-100K.</del>
+		- <del>Flat embeddings: `speech_baseline_iters_embed_1462867526` 1.961 iters 0-10K, 1.534 iters 90K-100K.</del>
+		- Update: I don't think these results are valid experimental procedure since I didn't control for time (giving baseline an advantage) or number of params (giving two-tier an advantage). Probably best to ignore them. Instead see the results for `twotier_fs1_iters_1463157179` above.
 	- Conclusions
 		- If you ignore training speed, for the hyperparameters tested, my model slightly outperforms the baseline. 
 		- But I don't think it's fair to ignore training speed. If you control for training speed, for the hyperparameters tested, my model outperforms the baseline by a wider margin.

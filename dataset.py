@@ -10,7 +10,10 @@ import scikits.audiolab
 import random
 import time
 
+random_seed = 123
+
 def feed_epoch(data_path, n_files, BATCH_SIZE, SEQ_LEN, OVERLAP, Q_LEVELS, Q_ZERO):
+    global random_seed
     """
     Generator that yields training inputs (subbatch, reset). `subbatch` contains
     quantized audio data; `reset` is a boolean indicating the start of a new
@@ -45,6 +48,7 @@ def feed_epoch(data_path, n_files, BATCH_SIZE, SEQ_LEN, OVERLAP, Q_LEVELS, Q_ZER
         eps = numpy.float64(1e-5)
 
         data -= data.min(axis=1)[:, None]
+
         data *= ((Q_LEVELS - eps) / data.max(axis=1)[:, None])
         data += eps/2
         # print "WARNING using zero-dc-offset normalization"
@@ -58,8 +62,9 @@ def feed_epoch(data_path, n_files, BATCH_SIZE, SEQ_LEN, OVERLAP, Q_LEVELS, Q_ZER
 
     paths = [data_path+'/p{}.flac'.format(i) for i in xrange(n_files)]
 
-    random.seed(123)
+    random.seed(random_seed)
     random.shuffle(paths)
+    random_seed += 1
 
     batches = []
     for i in xrange(len(paths) / BATCH_SIZE):
@@ -82,14 +87,24 @@ def feed_epoch(data_path, n_files, BATCH_SIZE, SEQ_LEN, OVERLAP, Q_LEVELS, Q_ZER
             data, fs, enc = scikits.audiolab.flacread(path)
             batch[i, :len(data)] = data
 
-        batch = batch_quantize(batch)
+        if Q_LEVELS != None:
+            batch = batch_quantize(batch)
 
-        batch = numpy.concatenate([
-            numpy.full((BATCH_SIZE, OVERLAP), Q_ZERO, dtype='int32'),
-            batch
-        ], axis=1)
+            batch = numpy.concatenate([
+                numpy.full((BATCH_SIZE, OVERLAP), Q_ZERO, dtype='int32'),
+                batch
+            ], axis=1)
+        else:
+            batch = numpy.concatenate([
+                numpy.full((BATCH_SIZE, OVERLAP), 0, dtype='float32'),
+                batch
+            ], axis=1)
+            batch = batch.astype('float32')
 
-        for i in xrange(batch.shape[1] / SEQ_LEN):
+            batch -= batch.mean()
+            batch /= batch.std()
+
+        for i in xrange((batch.shape[1] - OVERLAP) // SEQ_LEN):
             reset = numpy.int32(i==0)
             subbatch = batch[:, i*SEQ_LEN : (i+1)*SEQ_LEN + OVERLAP]
             yield (subbatch, reset)

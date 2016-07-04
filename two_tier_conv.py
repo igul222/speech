@@ -63,6 +63,69 @@ all_vars = sorted(all_vars, key=lambda x: x[0])
 for var_name, var_value in all_vars:
     print "\t{}: {}".format(var_name, var_value)
 
+def MaskedConv1D(name, input_dim, output_dim, filter_size, inputs, mask_type=None, he_init=False):
+    """
+    inputs.shape: (batch size, input_dim, 1, width)
+    mask_type: None, 'a', 'b'
+    output.shape: (batch size, output_dim, 1, width)
+    """
+
+    if mask_type is not None:
+        mask = numpy.ones(
+            (output_dim, input_dim, 1, filter_size), 
+            dtype=theano.config.floatX
+        )
+        center = filter_size//2
+        mask[:,:,0,center+1:] = 0.
+        if mask_type == 'a':
+            mask[:,:,0,center] = 0.
+
+    def uniform(stdev, size):
+        """uniform distribution with the given stdev and size"""
+        return numpy.random.uniform(
+            low=-stdev * numpy.sqrt(3),
+            high=stdev * numpy.sqrt(3),
+            size=size
+        ).astype(theano.config.floatX)
+
+    if mask_type=='a':
+        n_in = filter_size//2
+    elif mask_type=='b':
+        n_in = filter_size//2 + 1
+    else:
+        n_in = filter_size
+    n_in *= input_dim
+
+    if he_init:
+        init_stdev = numpy.sqrt(2./n_in)
+    else:
+        init_stdev = numpy.sqrt(1./n_in)
+
+    filters = lib.param(
+        name+'.Filters',
+        uniform(
+            init_stdev,
+            (output_dim, input_dim, 1, filter_size)
+        )
+    )
+
+    if mask_type is not None:
+        filters = filters * mask
+
+    # TODO benchmark against the lasagne 'conv1d' implementations
+    result = T.nnet.conv2d(inputs, filters, filter_flip=False, border_mode='half')
+
+    if mask_type is not None:
+        result = result[:, :, :, :inputs.shape[3]]
+
+    biases = lib.param(
+        name+'.Biases',
+        numpy.zeros(output_dim, dtype=theano.config.floatX)
+    )
+    result += biases[None, :, None, None]
+
+    return result
+
 def frame_level_rnn(input_sequences, h0, reset):
     """
     input_sequences.shape: (batch size, n frames * FRAME_SIZE)
